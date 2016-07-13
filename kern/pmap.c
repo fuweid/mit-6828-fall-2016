@@ -221,6 +221,10 @@ mem_init(void)
    // to secondary page table. But, actually, we allocate one page for
    // the secondary page table. Therefore, we actually use 4MB for 
    // secondary page table and 4KB for page table.
+   // Note: if we try to higher va, like 0xffffffff, out of exisiting physical,
+   // we will fail. Because boot_map_region just allocates entry of pgdir,
+   // not for entry of page table. If the va is out of exisiting physical,
+   // the numer of page will be out of bound.
    boot_map_region(kern_pgdir, KERNBASE, ~KERNBASE + 1, 0x0, PTE_W);
 
 	// Check that the initial page directory has been set up correctly.
@@ -388,9 +392,11 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-   struct PageInfo * pgtable = NULL;
-   pte_t *result = NULL;
+   struct PageInfo * pgtable;
+   pte_t *res;
 
+   res = 0;
+   pgtable = 0;
    pgdir = &pgdir[PDX(va)];
    if (!(*pgdir & PTE_P) && create) {
      pgtable = page_alloc(ALLOC_ZERO);
@@ -401,9 +407,9 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
    }
 
    if(*pgdir & PTE_P) {
-     result = &(((pte_t *) KADDR(PTE_ADDR(*pgdir)))[PTX(va)]);
+     res = &(((pte_t *) KADDR(PTE_ADDR(*pgdir)))[PTX(va)]);
    }
-   return result;
+   return res;
 }
 
 //
@@ -490,6 +496,7 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
    struct PageInfo *result = NULL;
    pte_t *pte;
    
+   *pte_store = 0;
    pte = pgdir_walk(pgdir, va, 0);
    if (pte && (*pte & PTE_P)) {
      *pte_store = pte;
@@ -564,15 +571,18 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
-   pde_t *pgdir = env->env_pgdir;
-   uintptr_t start_va = ROUNDDOWN((uintptr_t)va, PGSIZE);
-   uintptr_t end_va = ROUNDDOWN((uintptr_t)va + len, PGSIZE);
-
-   for (; start_va <= end_va; start_va += PGSIZE) {
-     if (start_va > ULIM || (pgdir[PDX(start_va)] & perm)) {
-       user_mem_check_addr = start_va;
+   pde_t *pgdir;
+   pte_t *pte;
+   uintptr_t iva, sva;
+    
+   pgdir = env->env_pgdir;
+   iva = sva = (uintptr_t)va;
+   while (iva - sva <= len) {
+     if (iva > ULIM || !page_lookup(pgdir, (void *)iva, &pte) || !((*pte & perm) == perm)) {
+       user_mem_check_addr = iva;
        return -E_FAULT;
      }
+     iva = ROUNDDOWN(iva + PGSIZE, PGSIZE);
    }
 	return 0;
 }

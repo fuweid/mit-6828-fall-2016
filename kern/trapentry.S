@@ -46,10 +46,59 @@
 /*
  * Lab 3: Your code here for generating entry points for the different traps.
  */
+TRAPHANDLER_NOEC(t_divide, T_DIVIDE)
+TRAPHANDLER_NOEC(t_debug, T_DEBUG)
+TRAPHANDLER_NOEC(t_nmi, T_NMI)
+TRAPHANDLER_NOEC(t_brkpt, T_BRKPT)
+TRAPHANDLER_NOEC(t_oflow, T_OFLOW)
+TRAPHANDLER_NOEC(t_bound, T_BOUND)
+TRAPHANDLER_NOEC(t_illop, T_ILLOP)
+TRAPHANDLER_NOEC(t_device, T_DEVICE)
+TRAPHANDLER(t_dblflt, T_DBLFLT)
+TRAPHANDLER(t_tss, T_TSS)
+TRAPHANDLER(t_segnp, T_SEGNP)
+TRAPHANDLER(t_stack, T_STACK)
+TRAPHANDLER(t_gpflt, T_GPFLT)
+TRAPHANDLER(t_pgflt, T_PGFLT)
+TRAPHANDLER_NOEC(t_fperr, T_FPERR)
+TRAPHANDLER_NOEC(t_align, T_ALIGN)
+TRAPHANDLER_NOEC(t_mchk, T_MCHK)
+TRAPHANDLER_NOEC(t_simderr, T_SIMDERR)
 
-
-
+TRAPHANDLER_NOEC(t_syscall, T_SYSCALL)
 /*
  * Lab 3: Your code here for _alltraps
  */
+
+/* INT instruction will do push
+ * +--------+ -----------------+
+ * | ss     | if change from   |
+ * +--------+                  |
+ * | esp    | user into kernel |
+ * +--------+ -----------------+
+ * | eflags |
+ * +--------+
+ * | cs     |
+ * +--------+
+ * | eip    |
+ * +--------+
+ * clear some bits of eflags
+ * set cs and eip
+ * 
+ * and TRAPHANDLER_NOEC and TRAPHANDLER will help us to push error code and
+ * trapno. Therefore, in _alltraps, what we only need to do is push es, ds and
+ * all registers.
+ * before call trap, we should set data segment and extra segment into kernal.
+ */
+
+ _alltraps:
+  pushl %es
+  pushl %ds
+  pushal
+
+  movl $GD_KD, %eax
+  movw %ax, %ds
+  movw %ax, %es
+  pushl %esp /* sub 0x10, %esp => we need to push esp here ? */
+  call trap
 

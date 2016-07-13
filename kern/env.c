@@ -292,8 +292,9 @@ region_alloc(struct Env *e, void *va, size_t len)
    for (; sva < eva; sva += PGSIZE) {
      if (sva > UTOP) {
        panic("only can access user env");
-     } else if (!(p = page_alloc(0)))
+     } else if (!(p = page_alloc(0))) {
        panic("page_alloc: %e", -E_NO_MEM);
+     }
 
      page_insert(e->env_pgdir, p, (void *)sva, PTE_U | PTE_W);
    }
@@ -370,14 +371,15 @@ load_icode(struct Env *e, uint8_t *binary)
        memset((void *) ph->p_va + ph->p_filesz, 0, ph->p_memsz - ph->p_filesz);
      }
    }
-   e->env_tf.tf_eip = ((struct Elf *) binary)->e_entry;
+   lcr3(PADDR(kern_pgdir));
 
+   e->env_tf.tf_eip = ((struct Elf *) binary)->e_entry;
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
 
 	// LAB 3: Your code here.
    region_alloc(e, (void *) USTACKTOP - PGSIZE, PGSIZE);
-   lcr3(PADDR(kern_pgdir));
+
 }
 
 //
@@ -474,6 +476,10 @@ env_destroy(struct Env *e)
 //
 // This function does not return.
 //
+// After enter this function, use tf address as esp so that we can use pop
+// value which we want to get.
+// 
+// IRET instruction will do pop eip, cs and esflag.
 void
 env_pop_tf(struct Trapframe *tf)
 {
@@ -514,14 +520,16 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
-   if (curenv && curenv->env_status == ENV_RUNNING)
-     curenv->env_status = ENV_RUNNABLE;
+   if (curenv != e) {
+     if (curenv && curenv->env_status == ENV_RUNNING) {
+       curenv->env_status = ENV_RUNNABLE;
+     }
 
-   curenv = e;
-   curenv->env_status = ENV_RUNNING;
-   curenv->env_runs += 1;
-
-   lcr3(PADDR(curenv->env_pgdir));
-   env_pop_tf(&(curenv->env_tf));
+     curenv = e;
+     curenv->env_status = ENV_RUNNING;
+     curenv->env_runs += 1;
+     lcr3(PADDR(e->env_pgdir));
+   }
+   env_pop_tf(&(e->env_tf));
 }
 

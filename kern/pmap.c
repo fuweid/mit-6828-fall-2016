@@ -279,7 +279,22 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
+   size_t i;
 
+   // Question: Why we can overwrite the region [KSTACKTOP - KSTKSIZE, KSTKSIZE]?
+   // Answer: In the initialize, the esp of boot cpu is above KERNBASE. After
+   // initialization, if user back into kernel space, the esp will be
+   // KSTACKTOP - indexOfCPU * (KSTKSIZE + KSTKGAP). See TSS
+   // 
+   // Since the percpu_kstacks is in initializaton process's stack, in the
+   // page_init function, kernel has alloacted for this region.
+   for (i = 0; i < NCPU; i++) {
+     boot_map_region(kern_pgdir,
+      KSTACKTOP - i * (KSTKGAP + KSTKSIZE) - KSTKSIZE,
+      KSTKSIZE,
+      PADDR(percpu_kstacks[i]),
+      PTE_P | PTE_W);
+   }
 }
 
 // --------------------------------------------------------------
@@ -325,13 +340,15 @@ page_init(void)
    // +-----------+----+-------+----+--------+---+------+-+--------+--------+---+
    // 0          4K   0x7c00      0x10000       640KB  1MB                 end(global var)
    // Question for Me: Why we can overwrite Boot Loader section and Kernel ELF
-   // Header Section?
+   // Header Section? Yes.
 
-	size_t i, low = ROUNDDOWN(IOPHYSMEM, PGSIZE) / PGSIZE,
-          high = ROUNDUP(PADDR(boot_alloc(0)), PGSIZE) / PGSIZE;
+	size_t i, low, high;
+   
+   low = ROUNDDOWN(IOPHYSMEM, PGSIZE) / PGSIZE;
+   high = ROUNDUP(PADDR(boot_alloc(0)), PGSIZE) / PGSIZE;
 	for (i = 0; i < npages; i++) {
       pages[i].pp_ref = 0;
-      if (i == 0 || (i >= low && i <= high)) {
+      if (i == 0 || (i >= low && i <= high) || i == PGNUM(MPENTRY_PADDR)) {
         pages[i].pp_ref = 1;
         pages[i].pp_link = NULL;
       } else {
@@ -613,7 +630,20 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+   size_t i;
+   void *res;
+   pte_t *pte;
+
+   res = (void *)base;
+   if (base + size >= MMIOLIM)
+     panic("Oops! Beyond MMIOLIM");
+
+   for (i = 0; i < size; i++) {
+     pte = pgdir_walk(kern_pgdir, (void *)base + i, 1);
+     *pte = PTE_ADDR(pa + i) | PTE_P | PTE_PCD | PTE_PWT | PTE_W;
+   }
+   base = ROUNDUP(base + size, PGSIZE);
+   return res;
 }
 
 static uintptr_t user_mem_check_addr;

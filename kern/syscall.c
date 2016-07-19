@@ -94,7 +94,6 @@ sys_exofork(void)
    if (r)
      return r;
    
-
    memcpy((void *)&e->env_tf, (void *)&curenv->env_tf, sizeof(struct Trapframe));
    e->env_tf.tf_regs.reg_eax = 0;
    e->env_status = ENV_NOT_RUNNABLE;
@@ -256,7 +255,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 
    p = page_lookup(srcenv->env_pgdir, (void *)sva, &pte);
    
-   if (!p || !(*pte & PTE_W))
+   if (!p || ((perm & PTE_W) && !(*pte & PTE_W)))
      return -E_INVAL;
 
    return page_insert(dstenv->env_pgdir, p, (void *)dva, perm);

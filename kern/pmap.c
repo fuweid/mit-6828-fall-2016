@@ -638,10 +638,7 @@ mmio_map_region(physaddr_t pa, size_t size)
    if (base + size >= MMIOLIM)
      panic("Oops! Beyond MMIOLIM");
 
-   for (i = 0; i < size; i++) {
-     pte = pgdir_walk(kern_pgdir, (void *)base + i, 1);
-     *pte = PTE_ADDR(pa + i) | PTE_P | PTE_PCD | PTE_PWT | PTE_W;
-   }
+   boot_map_region(kern_pgdir, base, size, pa, PTE_PCD | PTE_PWT | PTE_W);
    base = ROUNDUP(base + size, PGSIZE);
    return res;
 }

@@ -61,6 +61,19 @@ pgfault(struct UTrapframe *utf)
 // marked copy-on-write as well.  (Exercise: Why do we need to mark ours
 // copy-on-write again if it was already copy-on-write at the beginning of
 // this function?)
+// 
+// Because if the page of parent env is still writable and the sys_map_map just
+// do the copy of mapping, not content, other envs or the parent env can not
+// modify the data in the page.
+//
+// If we remark COW on parent first:
+//
+// In the duppage, when we map COW to child env, we push argu in stack. It will
+// raise the page fault. After page_handler realloc to parent, the page is
+// writable for parent. But this page still share with child.
+//
+// So, if the page was already COW at the beginning of this function, we still
+// set it to COW.
 //
 // Returns: 0 on success, < 0 on error.
 // It is also OK to panic on error.
@@ -117,7 +130,7 @@ fork(void)
    if (envid < 0) {
      panic("sys_exofork fail %e in fork", envid);
    } else if (envid == 0) {
-     thisenv = &envs[ENVX(envid)];
+     thisenv = &envs[ENVX(sys_getenvid())];
      return 0;
    }
 

@@ -108,6 +108,5 @@ TRAPHANDLER_NOEC(irq_error, IRQ_OFFSET + IRQ_ERROR)
   movw %ax, %ds
   movw %ax, %es
   pushl %esp /* sub 0x10, %esp => we need to push esp here ? */
-  cli
   call trap
 

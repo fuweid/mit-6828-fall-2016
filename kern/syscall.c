@@ -332,7 +332,46 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+   uintptr_t va;
+   struct Env *e;
+   struct PageInfo *p;
+   pte_t *pte;
+
+   e = 0;
+   va = (uintptr_t) srcva;
+   if (envid2env(envid, &e, 0))
+     return -E_BAD_ENV;
+
+   if (!e->env_ipc_recving)
+     return -E_IPC_NOT_RECV;
+
+   if (va < UTOP) {
+     if (ROUNDDOWN(va, PGSIZE) != va)
+       return -E_INVAL;
+
+     if ((perm & (~PTE_SYSCALL)) || !((perm & (PTE_U | PTE_P)) == (PTE_U | PTE_P)))
+       return -E_INVAL;
+
+     p = page_lookup(curenv->env_pgdir, (void *)va, &pte);
+     
+     if (!p || ((perm & PTE_W) && !(*pte & PTE_W))) {
+       return -E_INVAL;
+     }
+
+     if ((uintptr_t)e->env_ipc_dstva < UTOP)
+       if (page_insert(e->env_pgdir, p, e->env_ipc_dstva, perm))
+         return -E_NO_MEM;
+   } else {
+     perm = 0;
+   }
+
+   e->env_ipc_from = curenv->env_id;
+   e->env_ipc_perm = perm;
+   e->env_ipc_value = value;
+   e->env_tf.tf_regs.reg_eax = 0;
+   e->env_ipc_recving = false;
+   e->env_status = ENV_RUNNABLE;
+   return 0;
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -350,7 +389,17 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+   uintptr_t va;
+
+   va = (uintptr_t) dstva;
+
+   if (va < UTOP && ROUNDDOWN(va, PGSIZE) != va)
+     return -E_INVAL;
+
+   curenv->env_ipc_dstva = dstva;
+   curenv->env_ipc_recving = true;
+   curenv->env_status = ENV_NOT_RUNNABLE;
+   sched_yield();
 	return 0;
 }
 
@@ -396,6 +445,12 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
       break;
      case SYS_page_unmap:
       res = sys_page_unmap(a1, (void *)a2);
+      break;
+     case SYS_ipc_try_send:
+      res = sys_ipc_try_send(a1, a2, (void *)a3, a4);
+      break;
+     case SYS_ipc_recv:
+      res = sys_ipc_recv((void *)a1);
       break;
 	default:
 		return -E_NO_SYS;

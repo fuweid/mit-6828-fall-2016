@@ -31,17 +31,19 @@ sched_yield(void)
 	// LAB 4: Your code here.
    size_t i, j;
 
-   i = (curenv ? ENVX(curenv->env_id): 0);
-   for (j = 0; j < NENV; j++) {
-     idle = &envs[(i + j) % NENV];
-     if (idle->env_status == ENV_RUNNABLE)
-       env_run(idle);
+   idle = thiscpu->cpu_env;
+   i = j = ((idle != NULL) ? ENVX(idle->env_id) : 0); 
+   bool f = true;
+   for (; i != j || f; f = false) {
+     if (envs[i].env_status == ENV_RUNNABLE) {
+       env_run(&envs[i]);
+       return;
+     }
+     i = (i + 1) % NENV;
    }
 
-   if (curenv &&
-       curenv->env_status == ENV_RUNNING &&
-       curenv->env_cpunum == cpunum()) {
-     env_run(curenv);
+   if (idle && idle->env_status == ENV_RUNNING) {
+     env_run(idle);
      return;
    }
 

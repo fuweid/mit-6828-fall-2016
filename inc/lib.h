@@ -33,6 +33,8 @@ extern const char *binaryname;
 extern const volatile struct Env *thisenv;
 extern const volatile struct Env envs[NENV];
 extern const volatile struct PageInfo pages[];
+extern volatile pte_t uvpt[];
+extern volatile pde_t uvpd[];
 
 // exit.c
 void	exit(void);

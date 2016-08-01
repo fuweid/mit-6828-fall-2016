@@ -547,10 +547,10 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
    struct PageInfo *result = NULL;
    pte_t *pte;
    
-   *pte_store = 0;
    pte = pgdir_walk(pgdir, va, 0);
    if (pte && (*pte & PTE_P)) {
-     *pte_store = pte;
+     if (pte_store)
+       *pte_store = pte;
      result = pa2page(PTE_ADDR(*pte));
    }
 	return result;
@@ -698,6 +698,26 @@ user_mem_assert(struct Env *env, const void *va, size_t len, int perm)
 			"va %08x\n", env->env_id, user_mem_check_addr);
 		env_destroy(env);	// may not return
 	}
+}
+
+int
+user_mem_paddr(struct Env *env, const void *va, size_t len, int perm, physaddr_t *pa_store)
+{
+  struct PageInfo *pp;
+  
+  if (user_mem_check(env, va, len, perm | PTE_U) < 0) {
+    cprintf("[%08x] user_mem_check assertion failure for "
+			"va %08x\n", env->env_id, user_mem_check_addr);
+		env_destroy(env);	// may not return
+  }
+
+  pp = page_lookup(env->env_pgdir, (void *)va, 0);
+
+  if (!pp)
+    return -E_FAULT;
+  
+  *pa_store= page2pa(pp) | PGOFF(va);
+  return 0;
 }
 
 

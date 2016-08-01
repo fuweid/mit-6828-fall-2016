@@ -12,6 +12,7 @@
 #include <kern/console.h>
 #include <kern/sched.h>
 #include <kern/time.h>
+#include <kern/e1000.h>
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -428,7 +429,56 @@ static int
 sys_time_msec(void)
 {
 	// LAB 6: Your code here.
-	panic("sys_time_msec not implemented");
+   return time_msec();
+}
+
+static int
+sys_net_push_tx_desc(struct tx_desc *td)
+{
+  int retry, r;
+  physaddr_t pa;
+
+  user_mem_assert(curenv, td, sizeof(struct tx_desc), PTE_U);
+
+  if ((r = user_mem_paddr(curenv, (void *)(uint32_t)td->addr, td->length, PTE_U, &pa)) < 0)
+    return r;
+
+  retry = 20;
+  td->addr = pa;
+  while(1) {
+    while(retry > 0) {
+      if ((r = e1000_push_tx_desc(td)) == 0)
+        break;
+
+      retry--;
+    }
+
+    if (r < 0) {
+      retry = 20;
+      sys_yield();
+    } else {
+      break;
+    }
+  }
+  return 0;
+}
+
+
+// kernel can write user mem
+static int
+sys_net_receive_rx_desc(struct rx_desc *rd)
+{
+  int r;
+  struct rx_desc krd;
+
+  user_mem_assert(curenv, rd, sizeof(struct rx_desc), PTE_W | PTE_U | PTE_P);
+
+  if ((r = e1000_receive_rx_desc(&krd)) < 0)
+    return r;
+
+  memcpy((void *)(uint32_t)rd->addr, page2kva(pa2page(krd.addr)), krd.length);
+  rd->length = krd.length;
+  return 0;
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
@@ -482,6 +532,15 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
       break;
      case SYS_ipc_recv:
       res = sys_ipc_recv((void *)a1);
+      break;
+     case SYS_time_msec:
+      res = sys_time_msec();
+      break;
+     case SYS_net_push_tx_desc:
+      res = sys_net_push_tx_desc((struct tx_desc *)a1);
+      break;
+     case SYS_net_receive_rx_desc:
+      res = sys_net_receive_rx_desc((struct rx_desc *)a1);
       break;
 	default:
 		return -E_INVAL;

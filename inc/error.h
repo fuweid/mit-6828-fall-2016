@@ -26,6 +26,9 @@ enum {
 	E_NOT_EXEC	,	// File not a valid executable
 	E_NOT_SUPP	,	// Operation not supported
 
+   E_TQ_FULL   ,  // Transmit Descriptor Queue is full
+   E_RQ_EMPTY  ,  // Receive Descriptor Queue is empty
+
 	MAXERROR
 };
 

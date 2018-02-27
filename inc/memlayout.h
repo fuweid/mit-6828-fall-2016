@@ -147,7 +147,12 @@ typedef uint32_t pte_t;
 typedef uint32_t pde_t;
 
 #if JOS_USER
-/*
+/* The processor has no concept of page directories, page tables, and pages
+ * being anything other than plain memory. So there's nothing that says a
+ * particular page in memory can't serve as two or three of these at once.
+ * The processor just follows pointers:
+ *     pd = lcr3(); pt = *(pd+4*PDX); page = *(pt+4*PTX);
+ *
  * The page directory entry corresponding to the virtual address range
  * [UVPT, UVPT + PTSIZE) points to the page directory itself.  Thus, the page
  * directory is treated as a page table as well as a page directory.

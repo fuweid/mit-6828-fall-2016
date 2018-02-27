@@ -7,10 +7,6 @@
 // It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
 #define PTE_COW		0x800
 
-extern volatile pte_t uvpt[];
-extern volatile pde_t uvpd[];
-
-extern void _pgfault_upcall();
 //
 // Custom page fault handler - if faulting page is copy-on-write,
 // map in our own private writable copy.
@@ -87,7 +83,10 @@ duppage(envid_t envid, unsigned pn)
 	// LAB 4: Your code here.
    addr = (void *) (pn * PGSIZE);
 
-   if (((uvpt[pn] & PTE_W) == PTE_W) || ((uvpt[pn] & PTE_COW) == PTE_COW)) {
+   if ((uvpt[pn] & PTE_SHARE) == PTE_SHARE) {
+     if ((r = sys_page_map(0, addr, envid, addr, uvpt[pn] & PTE_SYSCALL)) < 0)
+       panic("sys_page_map: %e", r);
+   } else if(((uvpt[pn] & PTE_W) == PTE_W) || ((uvpt[pn] & PTE_COW) == PTE_COW)) {
      if ((r = sys_page_map(0, addr, envid, addr, PTE_P | PTE_U | PTE_COW)) < 0)
        panic("sys_page_map: %e", r);
 
@@ -123,6 +122,7 @@ fork(void)
    int r;
 	envid_t envid;
    uintptr_t va;
+   extern void _pgfault_upcall();
 
    set_pgfault_handler(pgfault);
 
